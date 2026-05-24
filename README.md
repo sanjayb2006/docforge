@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # DocForge — AI Documentation Automation Platform
 
 AI-powered backend that takes a DOCX template and generates submission-ready
@@ -173,3 +174,6 @@ the cached file.
 pytest tests/ -v
 # 51 tests: 15 unit + 36 stress
 ```
+=======
+# docforge
+>>>>>>> d91a98a86ae4ddb6ee2a9a6dac29fa5c9342d871
