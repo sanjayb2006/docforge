@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocForge — Dev Dashboard</title>
+<style>
+  /* ── Fonts ── */
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  /* ── Reset & tokens ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-base:      #09090b;
+    --bg-panel:     #121214;
+    --bg-surface:   #18181b;
+    --bg-hover:     #27272a;
+    
+    --border:       #27272a;
+    --border-hover: #3f3f46;
+    
+    --text-main:    #f4f4f5;
+    --text-muted:   #a1a1aa;
+    --text-dim:     #52525b;
+    
+    --accent:       #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-glow:  rgba(59, 130, 246, 0.15);
+    
+    --green:        #10b981;
+    --green-bg:     rgba(16, 185, 129, 0.1);
+    --red:          #ef4444;
+    --red-bg:       rgba(239, 68, 68, 0.1);
+    --yellow:       #f59e0b;
+    --yellow-bg:    rgba(245, 158, 11, 0.1);
+    
+    --mono:         'IBM Plex Mono', monospace;
+    --sans:         'IBM Plex Sans', sans-serif;
+    
+    --radius-sm:    6px;
+    --radius-md:    10px;
+    --radius-lg:    14px;
+    
+    --shadow-sm:    0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md:    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-glow:  0 0 15px var(--accent-glow);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-base);
+    color: var(--text-main);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ── Animations ── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-in { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+  /* ── Layout ── */
+  .shell {
+    display: grid;
+    grid-template-rows: 48px 1fr;
+    grid-template-columns: 260px 1fr;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Topbar ── */
+  .topbar {
+    grid-column: 1 / -1;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+    z-index: 10;
+  }
+  .topbar-logo {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .topbar-logo svg { color: var(--accent); }
+  .topbar-sep { color: var(--text-dim); }
+  .topbar-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .topbar-spacer { flex: 1; }
+  .topbar-health {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    background: var(--bg-surface);
+    padding: 4px 12px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+  }
+  .health-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: all 0.3s ease;
+  }
+  .health-dot.ok  { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .health-dot.err { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+  }
+  .sidebar-section { padding: 8px 16px; }
+  .sidebar-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+    user-select: none;
+    margin-bottom: 2px;
+  }
+  .nav-item:hover { color: var(--text-main); background: var(--bg-surface); }
+  .nav-item.active {
+    color: var(--accent);
+    background: var(--accent-glow);
+    font-weight: 500;
+  }
+  .nav-item svg { opacity: 0.7; }
+  .nav-item.active svg { opacity: 1; }
+
+  .sidebar-docs-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sidebar-doc-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    background: var(--bg-surface);
+  }
+  .sidebar-doc-item:hover { border-color: var(--border-hover); background: var(--bg-hover); }
+  .sidebar-doc-item.active { border-color: var(--accent); background: var(--accent-glow); }
+  
+  .sidebar-doc-name {
+    font-size: 12px;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+  .sidebar-doc-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* ── Main content & Panels ── */
+  .main {
+    overflow-y: auto;
+    padding: 32px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    background: var(--bg-base);
+  }
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .panel:hover { border-color: var(--border-hover); }
+  .panel-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255,255,255,0.01);
+  }
+  .panel-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-main);
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-body { padding: 20px; }
+
+  /* ── Drop zone ── */
+  .dropzone {
+    border: 1px dashed var(--border-hover);
+    border-radius: var(--radius-md);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    background: var(--bg-surface);
+  }
+  .dropzone:hover, .dropzone.dragging {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+  }
+  .dropzone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+  .dropzone-icon { 
+    color: var(--text-muted); 
+    margin-bottom: 16px;
+    transition: transform 0.2s ease;
+  }
+  .dropzone:hover .dropzone-icon {
+    transform: translateY(-4px);
+    color: var(--accent);
+  }
+  .dropzone-text { font-size: 14px; font-weight: 500; color: var(--text-main); }
+  .dropzone-sub  { font-size: 12px; color: var(--text-muted); margin-top: 8px; font-family: var(--mono); }
+  .dropzone.uploading { pointer-events: none; opacity: 0.5; }
+
+  /* ── Upload progress ── */
+  .upload-progress { margin-top: 16px; display: none; }
+  .upload-progress.visible { display: block; animation: fadeIn 0.3s; }
+  .progress-bar-track {
+    height: 4px;
+    background: var(--bg-surface);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    border-radius: 99px;
+  }
+  .progress-bar-fill.indeterminate {
+    width: 30%;
+    animation: progress-slide 1s ease-in-out infinite;
+  }
+  @keyframes progress-slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary {
+    background: var(--text-main);
+    color: var(--bg-base);
+  }
+  .btn-primary:hover:not(:disabled) { background: #fff; transform: translateY(-1px); }
+  
+  .btn-outline {
+    background: transparent;
+    border-color: var(--border-hover);
+    color: var(--text-main);
+  }
+  .btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+  
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    padding: 6px 10px;
+  }
+  .btn-ghost:hover:not(:disabled) { color: var(--text-main); background: var(--bg-surface); }
+  .btn-sm { font-size: 12px; padding: 4px 10px; }
+
+  /* ── Status badges ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 2px 8px;
+    border-radius: 99px;
+    border: 1px solid transparent;
+    text-transform: lowercase;
+  }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+  
+  .badge-uploaded  { background: var(--bg-surface); border-color: var(--border-hover); color: var(--text-muted); }
+  .badge-parsed    { background: var(--green-bg); border-color: rgba(16, 185, 129, 0.2); color: var(--green); }
+  .badge-parse_failed { background: var(--red-bg); border-color: rgba(239, 68, 68, 0.2); color: var(--red); }
+  .badge-pending   { background: var(--yellow-bg); border-color: rgba(245, 158, 11, 0.2); color: var(--yellow); }
+  .badge-running   { background: var(--accent-glow); border-color: rgba(59, 130, 246, 0.2); color: var(--accent); }
+  .badge-completed { background: var(--green-bg); border-color: rgba(16, 185, 129, 0.2); color: var(--green); }
+  .badge-failed    { background: var(--red-bg); border-color: rgba(239, 68, 68, 0.2); color: var(--red); }
+
+  .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* ── Lists & Rows ── */
+  .jobs-list { display: flex; flex-direction: column; gap: 8px; }
+  .job-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: var(--bg-base);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+  }
+  .job-row:hover { border-color: var(--border-hover); box-shadow: var(--shadow-sm); }
+  .job-time { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+
+  /* ── Terminal / Logs ── */
+  .log-box {
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    max-height: 250px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    line-height: 1.6;
+  }
+  .log-box::before {
+    content: "❯_";
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .log-line-err { color: var(--red); }
+
+  /* ── Inputs & Forms ── */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .field-input, .field-textarea {
+    font-family: var(--sans);
+    font-size: 13px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    outline: none;
+    transition: all 0.2s ease;
+    width: 100%;
+  }
+  .field-input:focus, .field-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  
+  /* ── Section list (Checkboxes) ── */
+  .section-list { display: flex; flex-direction: column; gap: 4px; }
+  .section-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--bg-base);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    transition: border-color 0.2s;
+  }
+  .section-row:hover { border-color: var(--border-hover); }
+  .section-level { font-family: var(--mono); font-size: 10px; color: var(--text-dim); background: var(--bg-surface); padding: 2px 6px; border-radius: 4px;}
+  .section-title { font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  
+  input[type="checkbox"] {
+    width: 16px; height: 16px;
+    border: 1px solid var(--border-hover);
+    border-radius: 4px;
+    appearance: none;
+    background: var(--bg-surface);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 14 14' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11.6666 3.5L5.24992 9.91667L2.33325 7' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-size: 10px;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  /* ── Toast ── */
+  #toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 9999;
+  }
+  .toast {
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    color: var(--text-main);
+    box-shadow: var(--shadow-md);
+    animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ── Utilities & Scrollbar ── */
+  .hidden { display: none !important; }
+  .empty { padding: 48px 20px; text-align: center; color: var(--text-muted); font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 12px;}
+  .empty svg { opacity: 0.5; }
+  
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Topbar ── -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+      DocForge
+    </div>
+    <span class="topbar-sep">/</span>
+    <span class="topbar-sub">Dev Dashboard</span>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-health">
+      <div class="health-dot" id="health-dot"></div>
+      <span id="health-label">Checking...</span>
+    </div>
+    <a href="/docs" target="_blank" class="btn btn-outline btn-sm" style="font-family: var(--mono); font-size: 11px;">API DOCS ↗</a>
+  </header>
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Views</div>
+      <div class="nav-item active" data-view="upload" onclick="switchView('upload', this)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,16 12,12 8,16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>
+        Upload Engine
+      </div>
+      <div class="nav-item" data-view="docs" onclick="switchView('docs', this)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Library 
+        <span id="doc-count" class="badge badge-uploaded hidden" style="margin-left: auto;">0</span>
+      </div>
+    </div>
+
+    <div style="height: 1px; background: var(--border); margin: 16px 16px;"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Recent Templates</div>
+    </div>
+    <div class="sidebar-docs-list" id="sidebar-docs"></div>
+
+    <div style="margin-top: auto; padding: 16px; border-top: 1px solid var(--border);">
+      <div style="font-family: var(--mono); font-size: 10px; color: var(--text-dim);">
+        DocForge Engine v1.0.0<br>
+        <span id="api-base">localhost:8000</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main content ── -->
+  <main class="main" id="main-content">
+
+    <!-- VIEW: UPLOAD -->
+    <div id="view-upload" class="animate-in">
+      <div class="panel" style="margin-bottom: 24px;">
+        <div class="panel-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          <span class="panel-title">Ingest Template</span>
+        </div>
+        <div class="panel-body">
+          <div class="dropzone" id="dropzone" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+            <input type="file" id="file-input" accept=".docx,.pdf" onchange="onFileSelect(event)">
+            <div class="dropzone-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><polyline points="12,18 12,12"/><polyline points="9,15 12,12 15,15"/></svg>
+            </div>
+            <div class="dropzone-text">Drop structural template (DOCX/PDF) here</div>
+            <div class="dropzone-sub">Upload file to initiate parsing sequence · Max 50 MB</div>
+          </div>
+          <div class="upload-progress" id="upload-progress">
+            <div style="font-family: var(--mono); font-size: 11px; margin-bottom: 8px; color: var(--text-muted);" id="progress-label">Initiating upload...</div>
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill indeterminate" id="progress-fill"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="recent-panel">
+        <div class="panel-header">
+          <span class="panel-title">Recent Ingestions</span>
+          <button class="btn btn-ghost btn-sm" onclick="loadDocuments()">Refresh</button>
+        </div>
+        <div class="panel-body" id="recent-list">
+           <div class="empty">No templates uploaded.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: DOCS LIST -->
+    <div id="view-docs" class="hidden">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Document Library</span>
+          <button class="btn btn-ghost btn-sm" onclick="loadDocuments()">Refresh</button>
+        </div>
+        <div class="panel-body" id="docs-list-body">
+          <div class="empty">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW: DOC DETAIL -->
+    <div id="view-detail" class="hidden">
+      <!-- Injected by JS -->
+    </div>
+
+  </main>
+</div>
+
+<!-- ── Toast container ── -->
+<div id="toast-container"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// CONFIG & STATE
+// ══════════════════════════════════════════════
+const API = '';   
+let documents = [];
+let activeDocId = null;
+let pollTimers = {};   
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  checkHealth();
+  loadDocuments();
+  setInterval(checkHealth, 15000);
+});
+
+// ══════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════
+function switchView(view, el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  
+  ['upload','docs','detail'].forEach(v => {
+    const section = document.getElementById(`view-${v}`);
+    if (section) {
+      if (v === view) {
+        section.classList.remove('hidden');
+        section.classList.add('animate-in');
+      } else {
+        section.classList.add('hidden');
+        section.classList.remove('animate-in');
+      }
+    }
+  });
+}
+
+function openDocDetail(docId) {
+  activeDocId = docId;
+  switchView('detail', null);
+  document.querySelectorAll('.sidebar-doc-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.docId === docId);
+  });
+  renderDocDetail(docId);
+}
+
+// ══════════════════════════════════════════════════════
+// CORE API CALLS (Health, Load Docs)
+// ══════════════════════════════════════════════════════
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/health`);
+    const dot = document.getElementById('health-dot');
+    const lbl = document.getElementById('health-label');
+    if (r.ok) {
+      dot.className = 'health-dot ok';
+      lbl.textContent = `System Online`;
+    } else {
+      dot.className = 'health-dot err';
+      lbl.textContent = 'API Error';
+    }
+  } catch {
+    document.getElementById('health-dot').className = 'health-dot err';
+    document.getElementById('health-label').textContent = 'Disconnected';
+  }
+}
+
+async function loadDocuments() {
+  try {
+    const r = await fetch(`${API}/api/documents/?limit=50`);
+    if (!r.ok) throw new Error(await r.text());
+    documents = await r.json();
+    renderSidebarDocs();
+    renderRecentList();
+    renderDocsList();
+    
+    const badge = document.getElementById('doc-count');
+    if (documents.length > 0) {
+      badge.textContent = documents.length;
+      badge.classList.remove('hidden');
+    }
+  } catch(e) {
+    toast('Failed to load library data', 'err');
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// RENDERING (Lists & Sidebar)
+// ══════════════════════════════════════════════
+function renderSidebarDocs() {
+  const el = document.getElementById('sidebar-docs');
+  if (!documents.length) return el.innerHTML = '';
+  
+  el.innerHTML = documents.slice(0, 10).map(d => `
+    <div class="sidebar-doc-item ${d.id === activeDocId ? 'active' : ''}" data-doc-id="${d.id}" onclick="openDocDetail('${d.id}')">
+      <div class="sidebar-doc-name" title="${esc(d.filename)}">${esc(d.filename)}</div>
+      <div class="sidebar-doc-meta">
+        ${statusBadge(d.status)} 
+        <span style="font-family:var(--mono);">${relTime(d.created_at)}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderRecentList() {
+  const el = document.getElementById('recent-list');
+  if (!documents.length) return el.innerHTML = `<div class="empty">No documents found. Upload a template above.</div>`;
+  
+  el.innerHTML = `<div class="jobs-list">${documents.slice(0, 5).map(d => generateDocRow(d)).join('')}</div>`;
+}
+
+function renderDocsList() {
+  const el = document.getElementById('docs-list-body');
+  if (!documents.length) return el.innerHTML = '<div class="empty">No documents.</div>';
+  
+  el.innerHTML = `<div class="jobs-list">${documents.map(d => generateDocRow(d)).join('')}</div>`;
+}
+
+function generateDocRow(d) {
+  return `
+    <div class="job-row" style="cursor:pointer;" onclick="openDocDetail('${d.id}')">
+      <div>
+        <div style="font-weight: 500; margin-bottom: 4px;">${esc(d.filename)}</div>
+        <div style="font-family: var(--mono); font-size: 11px; color: var(--text-dim);">ID: ${d.id}</div>
+      </div>
+      <div>${statusBadge(d.status)}</div>
+      <div class="job-time">${relTime(d.created_at)}</div>
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); deleteDoc('${d.id}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+      </button>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════════
+// DETAIL VIEW (The main workspace)
+// ══════════════════════════════════════════════════════
+async function renderDocDetail(docId) {
+  const el = document.getElementById('view-detail');
+  el.className = 'animate-in';
+  el.innerHTML = `<div class="empty"><svg class="spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg><br>Loading workspace...</div>`;
+
+  try {
+    const r = await fetch(`${API}/api/documents/${docId}`);
+    if (!r.ok) throw new Error(await r.text());
+    const doc = await r.json();
+    
+    const sections = doc.structure?.sections || [];
+    const fonts = doc.style_profile?.fonts_in_use || [];
+
+    el.innerHTML = `
+      <div class="panel" style="margin-bottom: 24px;">
+        <div class="panel-header">
+          <span class="panel-title">${esc(doc.filename)}</span>
+          ${statusBadge(doc.status)}
+          <button class="btn btn-ghost btn-sm" onclick="renderDocDetail('${doc.id}')">Refresh</button>
+        </div>
+        <div class="panel-body">
+          <div style="display: flex; gap: 16px; font-family: var(--mono); font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
+            <span>ID: ${doc.id}</span>
+            <span>TYPE: ${doc.file_type}</span>
+            <span>TABLES: ${doc.structure?.table_count || 0}</span>
+          </div>
+          ${doc.parse_error ? `<div class="log-box log-line-err">Error: ${esc(doc.parse_error)}</div>` : ''}
+          ${doc.status === 'uploaded' ? `<div class="log-box" style="color:var(--yellow);">Parsing geometry and styles in background...</div>` : ''}
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom: 24px;">
+        <!-- Structure -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Extracted Layout</span>
+          </div>
+          <div class="panel-body" style="max-height:400px;overflow-y:auto;">
+            ${sections.length === 0 ? `<div class="empty">No logical headers detected.</div>` : `
+              <div class="section-list">
+                ${sections.map((s, i) => `
+                  <div class="section-row" style="margin-left:${(s.heading_level-1)*16}px">
+                    <span class="section-level">H${s.heading_level}</span>
+                    <span class="section-title">${esc(s.heading_text)}</span>
+                    <input type="checkbox" class="section-check" data-heading="${esc(s.heading_text)}">
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        </div>
+
+        <!-- Generator -->
+        <div class="panel">
+          <div class="panel-header">
+             <span class="panel-title">Generation Prompt</span>
+          </div>
+          <div class="panel-body">
+             <div class="field" style="margin-bottom: 16px;">
+                <label class="field-label">Global Context Injection</label>
+                <textarea class="field-textarea" id="global-ctx" placeholder="Provide overall context (e.g., Target audience, tone, specific data parameters...)" rows="4"></textarea>
+             </div>
+             
+             <div style="display:flex; align-items:center; gap:8px; margin-bottom: 24px;">
+                <input type="checkbox" id="replace-all">
+                <span style="font-size: 12px; color: var(--text-muted);">Ignore sections and rewrite entire document flow</span>
+             </div>
+
+             <button class="btn btn-primary" onclick="submitGeneration('${doc.id}')" id="gen-btn" style="width: 100%; justify-content: center;">
+                Initialize Generation Job
+             </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="jobs-panel">
+        <div class="panel-header"><span class="panel-title">Output Artifacts</span></div>
+        <div class="panel-body" id="jobs-body"><div class="empty">Loading jobs...</div></div>
+      </div>
+    `;
+    loadJobsForDoc(docId);
+  } catch(e) {
+    el.innerHTML = `<div class="log-box log-line-err">Fatal Error: ${esc(e.message)}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// GENERATION TRIGGER
+// ══════════════════════════════════════════════════════
+async function submitGeneration(docId) {
+  const btn = document.getElementById('gen-btn');
+  const globalCtx = document.getElementById('global-ctx')?.value?.trim() || '';
+  const replaceAll = document.getElementById('replace-all')?.checked || false;
+
+  const sections = [];
+  document.querySelectorAll('.section-check:checked').forEach(chk => {
+    sections.push({ heading: chk.dataset.heading, instruction: "Rewrite this section based on global context." });
+  });
+
+  if (!replaceAll && sections.length === 0) {
+    return toast('Select specific sections or check "Rewrite entire document"', 'err');
+  }
+
+  const payload = {
+    global_context: globalCtx,
+    sections: sections.length ? sections : [{ heading: 'placeholder', instruction: 'Generate complete content' }],
+    replace_all: replaceAll,
+  };
+
+  btn.disabled = true;
+  btn.textContent = 'Executing...';
+
+  try {
+    const r = await fetch(`${API}/api/generate/${docId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!r.ok) throw new Error("Generation queue failed");
+    
+    toast('Generation job queued successfully', 'ok');
+    loadJobsForDoc(docId);
+  } catch(e) {
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Initialize Generation Job';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// JOB TRACKING & EXPORT
+// ══════════════════════════════════════════════════════
+async function loadJobsForDoc(docId) {
+  const el = document.getElementById('jobs-body');
+  try {
+    const r = await fetch(`${API}/api/generate/document/${docId}`);
+    const jobs = await r.json();
+    
+    if (!jobs.length) {
+      el.innerHTML = '<div class="empty">No generation artifacts found.</div>';
+      return;
+    }
+    
+    el.innerHTML = `<div class="jobs-list">${jobs.map(j => renderJobRow(j)).join('')}</div>`;
+    jobs.filter(j => j.status === 'pending' || j.status === 'running').forEach(j => startJobPoll(j.id, docId));
+  } catch(e) {
+    el.innerHTML = `<div class="log-box log-line-err">Failed to fetch job history.</div>`;
+  }
+}
+
+function renderJobRow(j) {
+  const isOk = j.status === 'completed';
+  return `
+    <div class="job-row" id="job-${j.id}">
+      <div>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
+          ${statusBadge(j.status)}
+          <span style="font-family:var(--mono); font-size:11px; color:var(--text-dim);">${j.id}</span>
+        </div>
+        ${j.error ? `<div class="log-box log-line-err" style="margin-top:8px; padding: 8px;">${esc(j.error)}</div>` : ''}
+      </div>
+      <div class="job-time">${relTime(j.created_at)}</div>
+      <div style="display:flex; gap:8px;">
+        ${isOk ? `
+          <a href="${API}/api/export/${j.id}" class="btn btn-outline btn-sm" download>DOCX</a>
+          <a href="${API}/api/export/${j.id}/pdf" class="btn btn-primary btn-sm" download>PDF</a>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function startJobPoll(jobId, docId) {
+  if (pollTimers[jobId]) return;
+  pollTimers[jobId] = setInterval(async () => {
+    try {
+      const r = await fetch(`${API}/api/generate/${jobId}/status`);
+      const job = await r.json();
+      const row = document.getElementById(`job-${jobId}`);
+      if (row && activeDocId === docId) row.outerHTML = renderJobRow(job);
+      
+      if (job.status === 'completed' || job.status === 'failed') {
+        clearInterval(pollTimers[jobId]);
+        delete pollTimers[jobId];
+      }
+    } catch(e) {}
+  }, 2000);
+}
+
+// ══════════════════════════════════════════════════════
+// UPLOAD LOGIC
+// ══════════════════════════════════════════════════════
+function onDragOver(e) { e.preventDefault(); document.getElementById('dropzone').classList.add('dragging'); }
+function onDragLeave(e) { document.getElementById('dropzone').classList.remove('dragging'); }
+function onDrop(e) { e.preventDefault(); document.getElementById('dropzone').classList.remove('dragging'); if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]); }
+function onFileSelect(e) { if (e.target.files[0]) uploadFile(e.target.files[0]); }
+
+async function uploadFile(file) {
+  const dz = document.getElementById('dropzone');
+  const prog = document.getElementById('upload-progress');
+  const lbl = document.getElementById('progress-label');
+  
+  dz.classList.add('uploading');
+  prog.classList.add('visible');
+  lbl.textContent = `Ingesting ${file.name}...`;
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const r = await fetch(`${API}/api/documents/upload`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error("Upload rejection from server");
+    const doc = await r.json();
+    
+    toast('Template ingested successfully', 'ok');
+    await loadDocuments();
+    setTimeout(() => { openDocDetail(doc.id); prog.classList.remove('visible'); dz.classList.remove('uploading'); }, 500);
+  } catch(e) {
+    lbl.textContent = `Upload failed`;
+    toast(e.message, 'err');
+    setTimeout(() => { prog.classList.remove('visible'); dz.classList.remove('uploading'); }, 2000);
+  }
+  document.getElementById('file-input').value = '';
+}
+
+async function deleteDoc(docId) {
+  if (!confirm('Purge this document and associated artifacts?')) return;
+  try {
+    await fetch(`${API}/api/documents/${docId}`, { method: 'DELETE' });
+    toast('Document purged', 'ok');
+    if (activeDocId === docId) switchView('upload', document.querySelector('[data-view=upload]'));
+    loadDocuments();
+  } catch(e) { toast('Purge failed', 'err'); }
+}
+
+// ══════════════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════════════
+function statusBadge(status) {
+  const pulse = (status === 'pending' || status === 'running' || status === 'uploaded') ? 'pulse' : '';
+  return `<span class="badge badge-${status}"><span class="badge-dot ${pulse}" style="background:currentColor"></span>${status}</span>`;
+}
+
+function relTime(iso) {
+  if (!iso) return '—';
+  const diff = (Date.now() - new Date(iso)) / 1000;
+  if (diff < 60) return `Just now`;
+  if (diff < 3600) return `${Math.round(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.round(diff/3600)}h ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function esc(str) { return String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function toast(msg, type = 'info') {
+  const icons = {
+    ok: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+    err: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`,
+    info: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`
+  };
+  
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `${icons[type]} <span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+</script>
+</body>
+</html>

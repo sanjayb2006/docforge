@@ -82,6 +82,7 @@ class TestParser:
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
         self.path = Path(self.tmp.name)
+        self.tmp.close()
         create_sample_docx(self.path)
 
     def teardown_method(self):
@@ -129,6 +130,7 @@ class TestStyleExtractor:
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
         self.path = Path(self.tmp.name)
+        self.tmp.close()
         create_sample_docx(self.path)
 
     def teardown_method(self):
@@ -161,10 +163,12 @@ class TestRebuilder:
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
         self.original = Path(self.tmp.name)
+        self.tmp.close()
         create_sample_docx(self.original)
 
         self.out_tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
         self.output = Path(self.out_tmp.name)
+        self.out_tmp.close()
         self.output.unlink()  # rebuilder will create it
 
     def teardown_method(self):

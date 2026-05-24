@@ -63,6 +63,7 @@ class TempDocx:
         self.doc = DocxDocument()
         self._tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
         self.path = Path(self._tmp.name)
+        self._tmp.close()
 
     def save(self):
         self.doc.save(str(self.path))
@@ -136,6 +137,7 @@ def _full_pipeline(docx_path: Path, ai_results: dict[str, str] | None = None) ->
 
     out_tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
     out_path = Path(out_tmp.name)
+    out_tmp.close()
     out_path.unlink()
 
     ai = ai_results or {}

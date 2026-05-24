@@ -132,6 +132,12 @@ def _apply_style(para, style_name: str, doc: DocxDocument) -> bool:
 
 # ── Run reconstruction ─────────────────────────────────────────────────────────
 
+def _clear_paragraph_runs(para) -> None:
+    """Remove all existing run XML from a paragraph before rebuilding it."""
+    for run in list(para._p.findall(qn("w:r"))):
+        para._p.remove(run)
+
+
 def _add_runs(para, runs: list[dict[str, Any]]) -> None:
     """
     Reconstruct inline runs with per-run formatting (bold/italic/font/size/color).
@@ -298,20 +304,18 @@ def _add_body_paragraph_from_info(
     Add a paragraph using its parsed para_info (original formatting preserved).
     Uses run data for mixed-format paragraphs; falls back to plain text.
     """
-    text  = para_info.get("text", "")
-    runs  = para_info.get("runs", [])
+    text = para_info.get("text", "")
+    runs = para_info.get("runs", [])
     style = para_info.get("style_name", "Normal")
+    has_page_break = para_info.get("has_page_break")
+    section_break = para_info.get("section_break")
 
-    # Skip truly empty paragraphs unless they have breaks
-    if not text and not para_info.get("has_page_break") and not para_info.get("section_break"):
+    # Skip truly empty paragraphs unless they have break markers
+    if not text and not runs and not has_page_break and not section_break:
         return
 
-    # Page break before this paragraph
-    if para_info.get("has_page_break"):
-        _insert_page_break(doc)
-        return  # The break IS the paragraph
-
     para = doc.add_paragraph()
+    _clear_paragraph_runs(para)
 
     # Apply named style
     if style and style != "Normal":
@@ -322,6 +326,24 @@ def _add_body_paragraph_from_info(
         _add_runs(para, runs)
     elif text:
         para.add_run(text)
+
+    # Preserve page breaks within the paragraph
+    if has_page_break:
+        br_run = para.add_run()
+        br = OxmlElement("w:br")
+        br.set(qn("w:type"), "page")
+        br_run._r.append(br)
+        log.debug("Added page break inside paragraph")
+
+    # Preserve section breaks at paragraph end
+    if section_break:
+        pPr = para._p.get_or_add_pPr()
+        sectPr = OxmlElement("w:sectPr")
+        type_el = OxmlElement("w:type")
+        type_el.set(qn("w:val"), section_break)
+        sectPr.append(type_el)
+        pPr.append(sectPr)
+        log.debug("Added section break type=%s", section_break)
 
     # Apply paragraph formatting
     _apply_paragraph_format(para, para_info, doc)
@@ -336,7 +358,9 @@ def _add_ai_paragraph(
     Add a paragraph of AI-generated text with body style from profile.
     No run-level detail available — single run per paragraph.
     """
-    para = doc.add_paragraph(text)
+    para = doc.add_paragraph()
+    _clear_paragraph_runs(para)
+    para.add_run(text)
     _apply_style(para, "Normal", doc)
 
     body_style = style_profile.get("body_style", {})
@@ -500,7 +524,11 @@ def rebuild_docx(
             original_paras = section.get("paragraphs", [])
             inserted = 0
             for para_info in original_paras:
-                if not para_info.get("is_empty") or para_info.get("has_page_break"):
+                if (
+                    not para_info.get("is_empty")
+                    or para_info.get("has_page_break")
+                    or para_info.get("section_break")
+                ):
                     _add_body_paragraph_from_info(output_doc, para_info, style_profile)
                     inserted += 1
             preserved_sections += 1

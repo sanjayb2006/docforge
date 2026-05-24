@@ -23,10 +23,12 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.api.routes import documents, generate, export
@@ -70,7 +72,8 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
-
+static_dir = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 # ── CORS ───────────────────────────────────────────────────────────────────────
 
 app.add_middleware(
@@ -126,8 +129,5 @@ async def health():
 
 @app.get("/", tags=["System"], summary="Root")
 async def root():
-    return {
-        "message": "DocForge API is running",
-        "docs": "/docs",
-        "health": "/health",
-    }
+    index_path = Path(__file__).resolve().parent / "static" / "index.html"
+    return FileResponse(index_path)
