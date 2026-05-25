@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.document import Document, GenerationJob, JobStatus
 from app.services.ai.generator import generate_sections
+from app.services.ai.sanitizer import sanitize_ai_results
 from app.services.docx.rebuilder import rebuild_docx, validate_output as validate_rebuild
 from app.services.docx.transformer import transform_docx, validate_output as validate_transform
 from app.services.docx.rebuild_audit import (
@@ -98,6 +99,12 @@ async def run_rewrite_job(
             replace_all=replace_all,
         )
         log.info("Job %s: AI generated %d sections", job_id, len(ai_results))
+
+        # ── Step 1b: Sanitize AI content ──────────────────────────────────────
+        # Remove all pollution/debug/metadata content before transformer injection
+        log.info("Job %s: sanitizing generated content", job_id)
+        ai_results = sanitize_ai_results(ai_results, structure=structure)
+        log.info("Job %s: sanitization complete — %d sections ready for injection", job_id, len(ai_results))
 
         # Persist intermediate results so they survive a crash
         job.ai_results = ai_results

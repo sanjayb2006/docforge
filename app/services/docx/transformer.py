@@ -242,6 +242,23 @@ def _insert_para_after(doc: DocxDocument, ref_para, new_p_xml) -> Any:
     return new_p_xml
 
 
+def _insert_para_before(doc: DocxDocument, ref_para, new_p_xml) -> Any:
+    """
+    Insert a new paragraph XML node immediately before ref_para in the body.
+    Returns the inserted element.
+    """
+    body = doc.element.body
+    ref_p = ref_para._p
+    ref_idx = list(body).index(ref_p)
+    body.insert(ref_idx, new_p_xml)
+    return new_p_xml
+
+
+def _paragraph_has_section_break(para) -> bool:
+    pPr = para._p.find(qn("w:pPr"))
+    return pPr is not None and pPr.find(qn("w:sectPr")) is not None
+
+
 def _remove_paragraph(doc: DocxDocument, para) -> None:
     """Remove a paragraph's XML node from the body entirely."""
     body = doc.element.body
@@ -273,6 +290,7 @@ def _replace_section_text(
     body_indices: list[int],
     ai_text:      str,
     section_name: str,
+    heading_index: int | None = None,
 ) -> None:
     """
     Replace text in a section's body paragraphs with AI-generated content.
@@ -285,6 +303,7 @@ def _replace_section_text(
         body_indices: List of paragraph indices for this section's body
         ai_text:      AI-generated plain text for this section
         section_name: For logging only
+        heading_index: Paragraph index of the section heading, if available
     """
     ai_paragraphs = _split_ai_text(ai_text)
 
@@ -312,6 +331,15 @@ def _replace_section_text(
                     "%s Para[%d] has image — preserved in-place", _TAG, idx
                 )
                 continue
+
+            if _paragraph_has_section_break(para) or not para.runs:
+                log.debug(
+                    "%s Para[%d] is structural or section-break only — preserved in-place",
+                    _TAG,
+                    idx,
+                )
+                continue
+
             body_paras.append(para)
 
     if not body_paras:
@@ -322,7 +350,7 @@ def _replace_section_text(
             "%s Section '%s': no writable body paras — injecting after heading",
             _TAG, section_name[:50],
         )
-        _inject_after_heading(doc, body_indices, ai_paragraphs, section_name)
+        _inject_after_heading(doc, heading_index, body_indices, ai_paragraphs, section_name)
         return
 
     n_orig = len(body_paras)
@@ -333,7 +361,7 @@ def _replace_section_text(
         _TAG, section_name[:50], n_orig, n_ai,
     )
 
-    # ── Case 1: Reuse existing paragraphs (most common, best fidelity) ────────
+    last_inserted = None
     for i, ai_para_text in enumerate(ai_paragraphs):
         if i < n_orig:
             # Reuse original paragraph i — formatting preserved entirely
@@ -343,9 +371,9 @@ def _replace_section_text(
                     "%s Para[%d] has no runs — skipped",
                     _WARN, body_indices[i] if i < len(body_indices) else -1,
                 )
+            last_inserted = body_paras[i]
         else:
             # ── Case 2: More AI paras than original — clone and insert ────────
-            # Clone the last original paragraph's XML (preserves its style)
             last_orig = body_paras[n_orig - 1]
             p_clone = _clone_paragraph_structure(last_orig)
 
@@ -354,28 +382,29 @@ def _replace_section_text(
                 t_el.text = ai_para_text
                 break  # only the first w:t gets the text
 
-            # Insert clone after the last processed paragraph
-            # We track the "last inserted" for sequential insertion
-            if i == n_orig:
-                # First overflow: insert after last original
-                _insert_para_after(doc, last_orig, p_clone)
+            if last_inserted is None:
+                last_inserted = last_orig
+
+            # Insert clone in the same section as the last original paragraph.
+            # If the last paragraph carries a section break, insert before it
+            # so the cloned overflow paragraphs remain in the same section.
+            if _paragraph_has_section_break(last_inserted):
+                last_inserted = _insert_para_before(doc, last_inserted, p_clone)
             else:
-                # Subsequent overflows: insert after the previous clone
-                # Re-fetch paragraphs since we modified the document
-                refreshed = doc.paragraphs
-                # Find our last clone by walking forward from the clone position
-                # Simpler: just insert at end of body before sectPr
-                body = doc.element.body
-                sectPr = body.find(qn("w:sectPr"))
-                if sectPr is not None:
-                    body.insert(list(body).index(sectPr), p_clone)
-                else:
-                    body.append(p_clone)
+                last_inserted = _insert_para_after(doc, last_inserted, p_clone)
 
     # ── Case 3: Fewer AI paras than original — remove excess ──────────────────
     if n_orig > n_ai:
         # Paragraphs body_paras[n_ai:] are excess — remove them from XML
         for excess_para in body_paras[n_ai:]:
+            if _paragraph_has_section_break(excess_para):
+                log.debug(
+                    "%s Preserving section-break paragraph instead of removing excess",
+                    _TAG,
+                )
+                _set_first_run_text(excess_para, "")
+                continue
+
             try:
                 _remove_paragraph(doc, excess_para)
                 log.debug("%s Removed excess paragraph", _TAG)
@@ -384,23 +413,37 @@ def _replace_section_text(
 
 
 def _inject_after_heading(
-    doc:          DocxDocument,
-    body_indices: list[int],
-    ai_paragraphs: list[str],
-    section_name: str,
+    doc:            DocxDocument,
+    heading_index:  int | None,
+    body_indices:   list[int],
+    ai_paragraphs:  list[str],
+    section_name:   str,
 ) -> None:
     """
     Fallback for sections with no writable body paragraphs.
-    Injects new Normal paragraphs after the heading.
+    Injects new Normal paragraphs after the heading or after the last known
+    body index while preserving section boundaries.
+
     This is the only place the transformer creates new paragraph XML,
     and it only happens for genuinely empty sections.
     """
     body = doc.element.body
-    sectPr = body.find(qn("w:sectPr"))
+    all_paras = doc.paragraphs
+    insert_after = None
+    insert_before = None
+
+    if heading_index is not None and 0 <= heading_index < len(all_paras):
+        insert_after = all_paras[heading_index]
+    elif body_indices:
+        last_index = max(body_indices)
+        if last_index < len(all_paras):
+            insert_after = all_paras[last_index]
+
+    if insert_after is not None and _paragraph_has_section_break(insert_after):
+        insert_before = insert_after
+        insert_after = None
 
     for text in ai_paragraphs:
-        # Build a minimal paragraph — no special formatting,
-        # just text in Normal style (same as what Word uses for empty body paras)
         p_el = OxmlElement("w:p")
         r_el = OxmlElement("w:r")
         t_el = OxmlElement("w:t")
@@ -409,10 +452,16 @@ def _inject_after_heading(
         r_el.append(t_el)
         p_el.append(r_el)
 
-        if sectPr is not None:
-            body.insert(list(body).index(sectPr), p_el)
+        if insert_before is not None:
+            insert_before = _insert_para_before(doc, insert_before, p_el)
+        elif insert_after is not None:
+            insert_after = _insert_para_after(doc, insert_after, p_el)
         else:
-            body.append(p_el)
+            sectPr = body.find(qn("w:sectPr"))
+            if sectPr is not None:
+                body.insert(list(body).index(sectPr), p_el)
+            else:
+                body.append(p_el)
 
     log.info(
         "%s Injected %d new paras for empty section '%s'",
@@ -420,81 +469,50 @@ def _inject_after_heading(
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# MAIN ENTRY POINT
-# ══════════════════════════════════════════════════════════════════════════════
-
 def transform_docx(
     original_path: str | Path,
     output_path:   str | Path,
     structure:     dict[str, Any],
     ai_results:    dict[str, str],
-    style_profile: dict[str, Any],  # kept for API compatibility, not used here
+    style_profile: dict[str, Any] | None = None,
 ) -> Path:
     """
-    High-fidelity in-place document transformation.
+    Transform the original DOCX in-place using AI-generated section text.
 
-    Replaces text in targeted sections while preserving all formatting,
-    images, tables, headers/footers, field codes, and XML structure.
-
-    Signature is identical to rebuild_docx() for drop-in compatibility.
-
-    Args:
-        original_path: Path to the uploaded template DOCX
-        output_path:   Where to write the transformed output DOCX
-        structure:     DocumentStructure dict from parser (sections + indices)
-        ai_results:    {heading_text: generated_body_text}
-        style_profile: Not used — formatting comes from the original XML
-
-    Returns:
-        Path to the output file.
+    This transformer copies the original file, opens the copy, and applies text
+    replacements in-place so that formatting, images, headers, footers, and
+    section properties are preserved.
     """
     original_path = Path(original_path)
-    output_path   = Path(output_path)
+    output_path = Path(output_path)
 
     if not ai_results:
-        # Nothing to do — copy the file as-is
         shutil.copy2(original_path, output_path)
         log.info("%s No AI results — original copied unchanged", _TAG)
         return output_path
 
-    # ── 1. Copy original → output (the template clone) ───────────────────────
     shutil.copy2(original_path, output_path)
     log.info("%s Copied original → %s", _TAG, output_path.name)
 
-    # ── 2. Open ONLY the output document ─────────────────────────────────────
-    # original stays on disk as the clean source — never opened for writing
     doc = DocxDocument(str(output_path))
-
     orig_para_count = len(doc.paragraphs)
-    log.info(
-        "%s Document opened: %d paragraphs, %d tables",
-        _TAG, orig_para_count, len(doc.tables),
-    )
 
-    # ── 3. Build section index from live document ─────────────────────────────
-    section_index = build_section_index(doc, structure)
-
-    # ── 4. Apply AI content section by section ────────────────────────────────
+    index_map = build_section_index(doc, structure)
     sections_applied = 0
     sections_skipped = 0
 
     for heading_text, ai_text in ai_results.items():
-        if not ai_text or not ai_text.strip():
-            log.debug("%s Skipping empty AI result for '%s'", _TAG, heading_text[:50])
-            sections_skipped += 1
-            continue
-
-        section_info = section_index.get(heading_text)
-        if section_info is None:
+        mapping = index_map.get(heading_text)
+        if mapping is None:
             log.warning(
-                "%s Section '%s' not found in index — skipped",
+                "%s Section '%s' not mapped in live document — skipped",
                 _WARN, heading_text[:50],
             )
             sections_skipped += 1
             continue
 
-        body_indices = section_info["body_indices"]
+        body_indices = mapping["body_indices"]
+        heading_index = mapping.get("heading_index")
 
         try:
             _replace_section_text(
@@ -502,6 +520,7 @@ def transform_docx(
                 body_indices=body_indices,
                 ai_text=ai_text,
                 section_name=heading_text,
+                heading_index=heading_index,
             )
             sections_applied += 1
             log.info(
@@ -512,7 +531,6 @@ def transform_docx(
                 len(ai_text),
             )
         except Exception as exc:
-            # Section-level failure: log, leave original content intact, continue
             log.warning(
                 "%s Failed to apply AI to '%s': %s — original preserved",
                 _WARN, heading_text[:50], exc,
@@ -524,7 +542,6 @@ def transform_docx(
         _TAG, sections_applied, sections_skipped,
     )
 
-    # ── 5. Save ───────────────────────────────────────────────────────────────
     out_para_count = len(doc.paragraphs)
     doc.save(str(output_path))
 
